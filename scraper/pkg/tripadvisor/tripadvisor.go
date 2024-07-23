@@ -2,6 +2,7 @@ package tripadvisor
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,12 +15,66 @@ import (
 	"time"
 )
 
+// WriteReviewsToCSVFile writes the reviews to a CSV file with the name specified in os.environ['Trip_Adv_Name']
+func WriteReviewsToCSVFile(reviews []Review, location Location) error {
+	fileName := os.Getenv("Trip_Adv_Name")
+	if fileName == "" {
+		return fmt.Errorf("environment variable Trip_Adv_Name is not set")
+	}
+
+	file, err := os.Create(fileName)
+	if err != nil {
+		return fmt.Errorf("could not create file: %w", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write the CSV header
+	header := []string{
+		"ReviewID",
+		"CreatedDate",
+		"PublishedDate",
+		"Rating",
+		"PublishPlatform",
+		"StayDate",
+		"TripType",
+		"Title",
+		"Text",
+		"LocationID",
+		"Username",
+	}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("could not write header to file: %w", err)
+	}
+
+	// Write the reviews
+	for _, review := range reviews {
+		row := []string{
+			strconv.Itoa(review.ID),
+			review.CreatedDate,
+			review.PublishedDate,
+			strconv.Itoa(review.Rating),
+			review.PublishPlatform,
+			review.TripInfo.StayDate,
+			review.TripInfo.TripType,
+			review.Title,
+			review.Text,
+			strconv.Itoa(review.LocationID),
+			review.Username,
+		}
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("could not write row to file: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // MakeRequest is a function that sends a POST request to the TripAdvisor GraphQL endpoint
 func MakeRequest(client *http.Client, queryID string, language []string, locationID uint32, offset uint32, limit uint32) (responses *Responses, err error) {
-
-	/*
-	* Prepare the request body
-	 */
+	// Prepare the request body
 	requestFilter := Filter{
 		Axis:       "LANGUAGE",
 		Selections: language,
@@ -101,7 +156,7 @@ func MakeRequest(client *http.Client, queryID string, language []string, locatio
 	}
 
 	if os.Getenv("DEBUG") == "true" {
-		fmt.Printf("Raw respsone:\n%s\n", string(responseBody))
+		fmt.Printf("Raw response:\n%s\n", string(responseBody))
 	}
 
 	return &responseData, err
